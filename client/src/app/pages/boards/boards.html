@@ -7,7 +7,7 @@
     </form>
   </div>
 
-  @if (boards(); as list) {
+  @if (active(); as list) {
     @if (list.length === 0) {
       <p class="empty">You don't have any boards yet. Create one above, or ask a teammate to invite you.</p>
     }
@@ -23,8 +23,8 @@
             <span class="muted small">{{ board.memberCount }} {{ board.memberCount === 1 ? 'member' : 'members' }}</span>
           </div>
           @if (board.myRole === 'Owner' && !board.isDemo) {
-            <button class="btn btn-ghost btn-small danger board-card-delete" (click)="remove(board, $event)">
-              Delete
+            <button class="btn btn-ghost btn-small board-card-delete" title="Hide this board (you can restore it)" (click)="archive(board, $event)">
+              Archive
             </button>
           }
         </a>
@@ -32,5 +32,21 @@
     </div>
   } @else {
     <p class="muted">Loading boards...</p>
+  }
+
+  @if (archived().length) {
+    <h2 class="section-title">Archived boards</h2>
+    <ul class="card member-list archived-list">
+      @for (board of archived(); track board.id) {
+        <li>
+          <div>
+            <strong>{{ board.name }}</strong>
+            <div class="muted small">Only you can see it. Members get it back when you restore it.</div>
+          </div>
+          <button class="btn btn-small" (click)="restore(board)">Restore</button>
+          <button class="btn btn-ghost btn-small danger" (click)="remove(board)">Delete forever</button>
+        </li>
+      }
+    </ul>
   }
 </section>

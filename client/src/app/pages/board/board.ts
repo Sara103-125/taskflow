@@ -1,16 +1,29 @@
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
-import { Component, OnDestroy, OnInit, computed, inject, input, numberAttribute, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, input, numberAttribute, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { Column, Task } from '../../core/models';
+import { Column, Priority, Task } from '../../core/models';
 import { TimeAgoPipe, dueLabel, initials, isOverdue } from '../../shared/format';
+import { ArchiveDialog } from './archive-dialog';
 import { BoardStore } from './board.store';
+import { LabelsDialog } from './labels-dialog';
 import { MembersDialog } from './members-dialog';
 import { TaskDialog } from './task-dialog';
 
 @Component({
   selector: 'app-board',
-  imports: [CdkDropList, CdkDrag, CdkDragHandle, FormsModule, RouterLink, TaskDialog, MembersDialog, TimeAgoPipe],
+  imports: [
+    CdkDropList,
+    CdkDrag,
+    CdkDragHandle,
+    FormsModule,
+    RouterLink,
+    TaskDialog,
+    MembersDialog,
+    LabelsDialog,
+    ArchiveDialog,
+    TimeAgoPipe,
+  ],
   providers: [BoardStore],
   templateUrl: './board.html',
 })
@@ -19,6 +32,10 @@ export class BoardPage implements OnInit, OnDestroy {
 
   /** From the route "boards/:id" (withComponentInputBinding). */
   readonly id = input.required({ transform: numberAttribute });
+  /** Optional "?task=5" (from a notification or My tasks): open that task's dialog. */
+  readonly task = input<number | undefined, unknown>(undefined, {
+    transform: (v: unknown) => (v === undefined || v === null || v === '' ? undefined : numberAttribute(v)),
+  });
 
   protected readonly initials = initials;
   protected readonly isOverdue = isOverdue;
@@ -29,10 +46,26 @@ export class BoardPage implements OnInit, OnDestroy {
 
   protected readonly dialog = signal<{ columnId: number; taskId: number | null } | null>(null);
   protected readonly showMembers = signal(false);
+  protected readonly showLabels = signal(false);
+  protected readonly showArchive = signal(false);
+  protected readonly priorities: Priority[] = ['Low', 'Medium', 'High'];
   protected readonly showActivity = signal(true);
   protected readonly editingBoardName = signal(false);
   protected readonly editingColumnId = signal<number | null>(null);
   protected newColumnName = '';
+
+  constructor() {
+    // Once the board has loaded, open the task from "?task=" (again whenever it changes).
+    let opened: number | undefined;
+    effect(() => {
+      const taskId = this.task();
+      const task = this.store.tasks().find((t) => t.id === taskId);
+      if (taskId !== opened && task) {
+        opened = taskId;
+        this.dialog.set({ columnId: task.columnId, taskId: task.id });
+      }
+    });
+  }
 
   ngOnInit(): void {
     void this.store.open(this.id());

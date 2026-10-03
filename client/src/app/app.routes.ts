@@ -18,5 +18,15 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./pages/board/board').then((m) => m.BoardPage),
   },
+  {
+    path: 'my-tasks',
+    canActivate: [authGuard],
+    loadComponent: () => import('./pages/my-tasks/my-tasks').then((m) => m.MyTasksPage),
+  },
+  {
+    path: 'profile',
+    canActivate: [authGuard],
+    loadComponent: () => import('./pages/profile/profile').then((m) => m.ProfilePage),
+  },
   { path: '**', redirectTo: 'boards' },
 ];

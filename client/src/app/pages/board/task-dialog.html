@@ -1,9 +1,27 @@
 <div class="backdrop" (click)="closed.emit()">
-  <div class="card dialog" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
-    <h2>{{ isEdit() ? 'Edit task' : 'New task' }}</h2>
+  <div class="card dialog dialog-wide" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="dialog-title">
+      <h2>{{ isEdit() ? 'Edit task' : 'New task' }}</h2>
+      @if (othersHere().length) {
+        <span class="editing-badge">&#9998; {{ othersHere().join(', ') }} {{ othersHere().length === 1 ? 'is' : 'are' }} also here</span>
+      }
+    </div>
+
+    @if (isEdit()) {
+      <div class="tabs tabs-left">
+        <button type="button" [class.active]="tab() === 'details'" (click)="tab.set('details')">Details</button>
+        <button type="button" [class.active]="tab() === 'checklist'" (click)="tab.set('checklist')">
+          Checklist @if (latest(); as t) { @if (t.checklistTotal) { ({{ t.checklistDone }}/{{ t.checklistTotal }}) } }
+        </button>
+        <button type="button" [class.active]="tab() === 'comments'" (click)="tab.set('comments')">
+          Comments @if (latest()?.commentCount) { ({{ latest()?.commentCount }}) }
+        </button>
+        <button type="button" [class.active]="tab() === 'history'" (click)="tab.set('history')">History</button>
+      </div>
+    }
 
     @if (wasDeleted()) {
-      <div class="banner banner-error">This task was deleted by someone else.</div>
+      <div class="banner banner-error">This task was deleted or archived by someone else.</div>
     } @else if (changedByOthers()) {
       <div class="banner">
         <strong>This task was updated by someone else.</strong>
@@ -17,57 +35,176 @@
       </div>
     }
 
-    <form (ngSubmit)="save()">
-      <label>
-        Title
-        <input name="title" [(ngModel)]="form.title" required maxlength="200" autofocus />
-      </label>
-      <label>
-        Description
-        <textarea name="description" [(ngModel)]="form.description" rows="4" maxlength="4000"></textarea>
-      </label>
-      <div class="form-row">
+    <!-- Details -->
+    @if (tab() === 'details') {
+      <form (ngSubmit)="save()">
         <label>
-          Assignee
-          <select name="assignee" [(ngModel)]="form.assigneeId">
-            <option [ngValue]="null">Unassigned</option>
-            @for (member of store.members(); track member.userId) {
-              <option [ngValue]="member.userId">{{ member.displayName }}</option>
-            }
-          </select>
+          Title
+          <input name="title" [(ngModel)]="form.title" required maxlength="200" autofocus />
         </label>
         <label>
-          Due date
-          <input name="dueDate" type="date" [(ngModel)]="form.dueDate" />
+          Description
+          <textarea name="description" [(ngModel)]="form.description" rows="4" maxlength="4000"></textarea>
         </label>
-        <label>
-          Priority
-          <select name="priority" [(ngModel)]="form.priority">
-            @for (p of priorities; track p) {
-              <option [ngValue]="p">{{ p }}</option>
-            }
-          </select>
-        </label>
-      </div>
+        <div class="form-row">
+          <label>
+            Assignee
+            <select name="assignee" [(ngModel)]="form.assigneeId">
+              <option [ngValue]="null">Unassigned</option>
+              @for (member of store.members(); track member.userId) {
+                <option [ngValue]="member.userId">{{ member.displayName }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            Due date
+            <input name="dueDate" type="date" [(ngModel)]="form.dueDate" />
+          </label>
+          <label>
+            Priority
+            <select name="priority" [(ngModel)]="form.priority">
+              @for (p of priorities; track p) {
+                <option [ngValue]="p">{{ p }}</option>
+              }
+            </select>
+          </label>
+        </div>
 
-      @if (error() && !changedByOthers()) {
-        <p class="error">{{ error() }}</p>
-      }
+        <div class="field">
+          <span class="field-label">Labels</span>
+          <div class="label-picker">
+            @for (label of store.labels(); track label.id) {
+              <button
+                type="button"
+                class="label-chip"
+                [class.selected]="form.labelIds.includes(label.id)"
+                [style.--label]="label.color"
+                (click)="toggleLabel(label.id)"
+              >
+                {{ label.name }}
+              </button>
+            } @empty {
+              <span class="muted small">No labels yet. Add some with the "Labels" button on the board.</span>
+            }
+          </div>
+        </div>
 
-      <div class="dialog-actions">
-        @if (isEdit()) {
-          <button class="btn btn-ghost danger" type="button" (click)="remove()" [disabled]="wasDeleted()">Delete</button>
+        @if (error() && !changedByOthers()) {
+          <p class="error">{{ error() }}</p>
         }
-        <span class="spacer"></span>
-        <button class="btn btn-ghost" type="button" (click)="closed.emit()">Cancel</button>
-        <button
-          class="btn btn-primary"
-          type="submit"
-          [disabled]="saving() || !form.title.trim() || wasDeleted() || changedByOthers()"
-        >
-          {{ saving() ? 'Saving...' : 'Save' }}
-        </button>
-      </div>
-    </form>
+
+        <div class="dialog-actions">
+          @if (isEdit()) {
+            <button class="btn btn-ghost" type="button" (click)="archive()" [disabled]="wasDeleted()" title="You can restore it from the board's archive">
+              Archive
+            </button>
+          }
+          <span class="spacer"></span>
+          <button class="btn btn-ghost" type="button" (click)="closed.emit()">Cancel</button>
+          <button
+            class="btn btn-primary"
+            type="submit"
+            [disabled]="saving() || !form.title.trim() || wasDeleted() || changedByOthers()"
+          >
+            {{ saving() ? 'Saving...' : 'Save' }}
+          </button>
+        </div>
+      </form>
+    }
+
+    <!-- Checklist -->
+    @if (tab() === 'checklist') {
+      @if (details(); as d) {
+        @if (d.checklist.length) {
+          <div class="progress" [title]="(latest()?.checklistDone ?? 0) + ' of ' + d.checklist.length + ' done'">
+            <div class="progress-bar" [style.width.%]="(100 * (latest()?.checklistDone ?? 0)) / d.checklist.length"></div>
+          </div>
+        }
+        <ul class="checklist">
+          @for (item of d.checklist; track item.id) {
+            <li>
+              <label class="check">
+                <input type="checkbox" [checked]="item.isDone" (change)="store.toggleChecklistItem(item)" />
+                <span [class.done]="item.isDone">{{ item.text }}</span>
+              </label>
+              <button class="icon-btn" title="Remove" (click)="store.deleteChecklistItem(item.id)">&times;</button>
+            </li>
+          } @empty {
+            <li class="muted small">No checklist items yet.</li>
+          }
+        </ul>
+        <form class="inline-form" (ngSubmit)="addChecklistItem()">
+          <input name="newItem" [(ngModel)]="newChecklistText" placeholder="Add an item..." maxlength="200" />
+          <button class="btn" type="submit" [disabled]="!newChecklistText.trim()">Add</button>
+        </form>
+      } @else {
+        <p class="muted">Loading...</p>
+      }
+    }
+
+    <!-- Comments -->
+    @if (tab() === 'comments') {
+      @if (details(); as d) {
+        <ul class="comments">
+          @for (comment of d.comments; track comment.id) {
+            <li>
+              <div class="comment-head">
+                <strong>{{ comment.authorName }}</strong>
+                <span class="muted small">{{ comment.createdAt | timeAgo }}</span>
+                <span class="spacer"></span>
+                @if (canDeleteComment(comment.authorId)) {
+                  <button class="icon-btn" title="Delete comment" (click)="store.deleteComment(comment.id)">&times;</button>
+                }
+              </div>
+              <!-- Kept on one line: the body uses white-space: pre-wrap, so template spaces would show. -->
+              <p class="comment-body">@for (part of segments(comment.body); track $index) {@if (part.mention) {<span class="mention">{{ part.text }}</span>} @else {{{ part.text }}}}</p>
+            </li>
+          } @empty {
+            <li class="muted small">No comments yet. Type &#64; to mention a teammate.</li>
+          }
+        </ul>
+        <form (ngSubmit)="addComment()">
+          <textarea
+            name="comment"
+            rows="3"
+            maxlength="2000"
+            placeholder="Write a comment... (type &#64; to mention someone)"
+            [ngModel]="commentText()"
+            (ngModelChange)="commentText.set($event)"
+          ></textarea>
+          @if (mentionSuggestions().length) {
+            <div class="mention-suggestions">
+              @for (m of mentionSuggestions(); track m.userId) {
+                <button type="button" class="btn btn-small" (click)="insertMention(m.displayName)">&#64;{{ m.displayName }}</button>
+              }
+            </div>
+          }
+          <div class="dialog-actions">
+            <span class="spacer"></span>
+            <button class="btn btn-primary" type="submit" [disabled]="!commentText().trim()">Comment</button>
+          </div>
+        </form>
+      } @else {
+        <p class="muted">Loading...</p>
+      }
+    }
+
+    <!-- History -->
+    @if (tab() === 'history') {
+      @if (details(); as d) {
+        <ul class="history">
+          @for (entry of d.history; track entry.id) {
+            <li>
+              <strong>{{ entry.userName }}</strong> {{ entry.change }}
+              <span class="muted small"> &middot; {{ entry.createdAt | timeAgo }}</span>
+            </li>
+          } @empty {
+            <li class="muted small">No history yet.</li>
+          }
+        </ul>
+      } @else {
+        <p class="muted">Loading...</p>
+      }
+    }
   </div>
 </div>

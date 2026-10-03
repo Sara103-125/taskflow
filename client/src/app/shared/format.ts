@@ -22,12 +22,14 @@ export class TimeAgoPipe implements PipeTransform {
   }
 }
 
+/** A Date as "2026-10-20" in the user's own time zone (toISOString would use UTC). */
+export function localDateText(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 /** True if a "2026-10-20" due date is before today (in the user's time zone). */
 export function isOverdue(dueDate: string | null): boolean {
-  if (!dueDate) return false;
-  const today = new Date();
-  const todayText = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  return dueDate < todayText;
+  return !!dueDate && dueDate < localDateText(new Date());
 }
 
 /** "2026-10-20" -> "Oct 20". Parsed as a local calendar day, so it never shifts by time zone. */

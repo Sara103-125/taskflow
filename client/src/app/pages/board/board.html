@@ -42,7 +42,48 @@
         {{ store.liveStatus() === 'live' ? 'Live' : store.liveStatus() === 'reconnecting' ? 'Reconnecting...' : 'Offline' }}
       </span>
       <button class="btn btn-small" (click)="showMembers.set(true)">Members ({{ store.members().length }})</button>
+      <button class="btn btn-small" (click)="showLabels.set(true)">Labels</button>
+      <button class="btn btn-small" (click)="showArchive.set(true)">Archived</button>
       <button class="btn btn-small" (click)="showActivity.set(!showActivity())">Activity</button>
+    </div>
+
+    <!-- Search & filters (applied on the client: the board is already loaded) -->
+    <div class="filter-bar">
+      <input
+        class="filter-search"
+        type="search"
+        placeholder="Search tasks..."
+        [ngModel]="store.filter().text"
+        (ngModelChange)="store.setFilter({ text: $event })"
+      />
+      <select [ngModel]="store.filter().assigneeId" (ngModelChange)="store.setFilter({ assigneeId: $event })" title="Assignee">
+        <option value="">Anyone</option>
+        <option value="me">Assigned to me</option>
+        <option value="none">Unassigned</option>
+        @for (m of store.members(); track m.userId) {
+          <option [value]="m.userId">{{ m.displayName }}</option>
+        }
+      </select>
+      <select [ngModel]="store.filter().priority" (ngModelChange)="store.setFilter({ priority: $event })" title="Priority">
+        <option value="">Any priority</option>
+        @for (p of priorities; track p) {
+          <option [value]="p">{{ p }}</option>
+        }
+      </select>
+      <select [ngModel]="store.filter().labelId" (ngModelChange)="store.setFilter({ labelId: $event })" title="Label">
+        <option [ngValue]="null">Any label</option>
+        @for (l of store.labels(); track l.id) {
+          <option [ngValue]="l.id">{{ l.name }}</option>
+        }
+      </select>
+      <select [ngModel]="store.filter().due" (ngModelChange)="store.setFilter({ due: $event })" title="Due date">
+        <option value="">Any due date</option>
+        <option value="overdue">Overdue</option>
+        <option value="week">Due in 7 days</option>
+      </select>
+      @if (store.isFiltering()) {
+        <button class="btn btn-ghost btn-small" (click)="store.clearFilter()">Clear filters</button>
+      }
     </div>
 
     <div class="board-body">
@@ -88,11 +129,31 @@
             >
               @for (task of store.tasksByColumn()[column.id]; track task.id) {
                 <div class="task-card" cdkDrag [cdkDragData]="task" (click)="dialog.set({ columnId: column.id, taskId: task.id })">
+                  @if (task.labelIds.length) {
+                    <div class="task-labels">
+                      @for (labelId of task.labelIds; track labelId) {
+                        @if (store.labelsById().get(labelId); as label) {
+                          <span class="label-chip selected small-chip" [style.--label]="label.color">{{ label.name }}</span>
+                        }
+                      }
+                    </div>
+                  }
+                  @if (store.editingByTask().get(task.id); as names) {
+                    <div class="editing-badge">&#9998; {{ names.join(', ') }} {{ names.length === 1 ? 'is' : 'are' }} editing</div>
+                  }
                   <div class="task-title">{{ task.title }}</div>
                   <div class="task-meta">
                     <span class="priority priority-{{ task.priority.toLowerCase() }}">{{ task.priority }}</span>
                     @if (task.dueDate) {
                       <span class="due" [class.overdue]="isOverdue(task.dueDate) && column.name !== 'Done'" [title]="'Due ' + task.dueDate">{{ dueLabel(task.dueDate) }}</span>
+                    }
+                    @if (task.checklistTotal) {
+                      <span class="meta-pill" [class.complete]="task.checklistDone === task.checklistTotal" title="Checklist">
+                        &#10003; {{ task.checklistDone }}/{{ task.checklistTotal }}
+                      </span>
+                    }
+                    @if (task.commentCount) {
+                      <span class="meta-pill" title="Comments">&#128172; {{ task.commentCount }}</span>
                     }
                     <span class="spacer"></span>
                     @if (task.assigneeName) {
@@ -103,7 +164,7 @@
                   </div>
                 </div>
               } @empty {
-                <div class="task-empty">Drop tasks here</div>
+                <div class="task-empty">{{ store.isFiltering() ? 'No matching tasks' : 'Drop tasks here' }}</div>
               }
             </div>
 
@@ -143,6 +204,12 @@
   }
   @if (showMembers()) {
     <app-members-dialog (closed)="showMembers.set(false)" />
+  }
+  @if (showLabels()) {
+    <app-labels-dialog (closed)="showLabels.set(false)" />
+  }
+  @if (showArchive()) {
+    <app-archive-dialog (closed)="showArchive.set(false)" />
   }
 } @else {
   <p class="page muted">Loading board...</p>

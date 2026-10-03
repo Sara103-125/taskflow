@@ -41,6 +41,15 @@ export class AuthService {
     return this.http.post<AuthResponse>(`${this.url}/demo`, {}).pipe(tap((r) => this.save(r)));
   }
 
+  /** Returns a new token too, because the display name is inside the JWT. */
+  updateProfile(displayName: string): Observable<AuthResponse> {
+    return this.http.put<AuthResponse>(`${this.url}/profile`, { displayName }).pipe(tap((r) => this.save(r)));
+  }
+
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    return this.http.post<void>(`${this.url}/change-password`, { currentPassword, newPassword });
+  }
+
   logout(): void {
     localStorage.removeItem(STORAGE_KEY);
     this.session.set(null);

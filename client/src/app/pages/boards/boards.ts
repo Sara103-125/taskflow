@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
@@ -17,6 +17,8 @@ export class BoardsPage implements OnInit {
   private readonly toast = inject(ToastService);
 
   protected readonly boards = signal<BoardSummary[] | null>(null);
+  protected readonly active = computed(() => this.boards()?.filter((b) => !b.archivedAt) ?? null);
+  protected readonly archived = computed(() => this.boards()?.filter((b) => b.archivedAt) ?? []);
   protected newBoardName = '';
 
   ngOnInit(): void {
@@ -35,14 +37,33 @@ export class BoardsPage implements OnInit {
     });
   }
 
-  protected remove(board: BoardSummary, event: Event): void {
+  /** Soft delete: members stop seeing it, the owner can restore it below. */
+  protected archive(board: BoardSummary, event: Event): void {
     event.preventDefault(); // the button sits inside the board's link
     event.stopPropagation();
-    if (!confirm(`Delete "${board.name}" and all its tasks? This can't be undone.`)) return;
+    this.api.archiveBoard(board.id).subscribe({
+      next: () => this.setArchived(board.id, new Date().toISOString()),
+      error: (err) => this.toast.error(errorMessage(err)),
+    });
+  }
+
+  protected restore(board: BoardSummary): void {
+    this.api.restoreBoard(board.id).subscribe({
+      next: () => this.setArchived(board.id, null),
+      error: (err) => this.toast.error(errorMessage(err)),
+    });
+  }
+
+  protected remove(board: BoardSummary): void {
+    if (!confirm(`Permanently delete "${board.name}" and all its tasks? This can't be undone.`)) return;
     this.api.deleteBoard(board.id).subscribe({
       next: () => this.boards.update((list) => (list ?? []).filter((b) => b.id !== board.id)),
       error: (err) => this.toast.error(errorMessage(err)),
     });
+  }
+
+  private setArchived(id: number, archivedAt: string | null): void {
+    this.boards.update((list) => (list ?? []).map((b) => (b.id === id ? { ...b, archivedAt } : b)));
   }
 
   private load(): void {
