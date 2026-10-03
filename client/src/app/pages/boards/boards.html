@@ -1,0 +1,36 @@
+<section class="page">
+  <div class="page-header">
+    <h1>My boards</h1>
+    <form class="inline-form" (ngSubmit)="create()">
+      <input name="name" [(ngModel)]="newBoardName" placeholder="New board name" maxlength="100" />
+      <button class="btn btn-primary" type="submit" [disabled]="!newBoardName.trim()">Create board</button>
+    </form>
+  </div>
+
+  @if (boards(); as list) {
+    @if (list.length === 0) {
+      <p class="empty">You don't have any boards yet. Create one above, or ask a teammate to invite you.</p>
+    }
+    <div class="board-grid">
+      @for (board of list; track board.id) {
+        <a class="card board-card" [routerLink]="['/boards', board.id]">
+          <h2>{{ board.name }}</h2>
+          <div class="board-card-meta">
+            <span class="badge">{{ board.myRole }}</span>
+            @if (board.isDemo) {
+              <span class="badge badge-demo">Demo</span>
+            }
+            <span class="muted small">{{ board.memberCount }} {{ board.memberCount === 1 ? 'member' : 'members' }}</span>
+          </div>
+          @if (board.myRole === 'Owner' && !board.isDemo) {
+            <button class="btn btn-ghost btn-small danger board-card-delete" (click)="remove(board, $event)">
+              Delete
+            </button>
+          }
+        </a>
+      }
+    </div>
+  } @else {
+    <p class="muted">Loading boards...</p>
+  }
+</section>

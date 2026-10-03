@@ -1,0 +1,149 @@
+@if (store.board(); as board) {
+  <section class="board-page">
+    <!-- Header: name, who's online, live status -->
+    <div class="board-header">
+      <a class="btn btn-ghost btn-small" routerLink="/boards">&larr; Boards</a>
+
+      @if (editingBoardName()) {
+        <input
+          #nameInput
+          class="board-name-input"
+          [value]="board.name"
+          maxlength="100"
+          (keydown.enter)="renameBoard(nameInput.value)"
+          (keydown.escape)="editingBoardName.set(false)"
+          (blur)="renameBoard(nameInput.value)"
+          autofocus
+        />
+      } @else {
+        <h1
+          class="board-name"
+          [class.editable]="store.isOwner()"
+          [title]="store.isOwner() ? 'Click to rename' : ''"
+          (click)="store.isOwner() && editingBoardName.set(true)"
+        >
+          {{ board.name }}
+        </h1>
+      }
+      @if (board.isDemo) {
+        <span class="badge badge-demo">Demo</span>
+      }
+
+      <span class="spacer"></span>
+
+      <div class="online" title="Online now">
+        @for (user of store.online(); track user.userId) {
+          <span class="avatar avatar-online" [title]="user.displayName + ' is viewing this board'">{{
+            initials(user.displayName)
+          }}</span>
+        }
+      </div>
+      <span class="live live-{{ store.liveStatus() }}" [title]="'Live updates: ' + store.liveStatus()">
+        {{ store.liveStatus() === 'live' ? 'Live' : store.liveStatus() === 'reconnecting' ? 'Reconnecting...' : 'Offline' }}
+      </span>
+      <button class="btn btn-small" (click)="showMembers.set(true)">Members ({{ store.members().length }})</button>
+      <button class="btn btn-small" (click)="showActivity.set(!showActivity())">Activity</button>
+    </div>
+
+    <div class="board-body">
+      <!-- Columns: the outer list reorders columns (drag by the header) -->
+      <div
+        class="columns"
+        cdkDropList
+        cdkDropListOrientation="horizontal"
+        [cdkDropListData]="store.sortedColumns()"
+        (cdkDropListDropped)="dropColumn($event)"
+      >
+        @for (column of store.sortedColumns(); track column.id) {
+          <div class="column" cdkDrag [cdkDragData]="column">
+            <div class="column-header" cdkDragHandle title="Drag to reorder columns">
+              @if (editingColumnId() === column.id) {
+                <input
+                  #colInput
+                  [value]="column.name"
+                  maxlength="50"
+                  (keydown.enter)="renameColumn(column, colInput.value)"
+                  (keydown.escape)="editingColumnId.set(null)"
+                  (blur)="renameColumn(column, colInput.value)"
+                  (mousedown)="$event.stopPropagation()"
+                  autofocus
+                />
+              } @else {
+                <h3 (dblclick)="editingColumnId.set(column.id)" title="Double-click to rename">{{ column.name }}</h3>
+                <span class="count">{{ store.tasksByColumn()[column.id]?.length ?? 0 }}</span>
+                <span class="spacer"></span>
+                <button class="icon-btn" title="Rename column" (click)="editingColumnId.set(column.id)">&#9998;</button>
+                <button class="icon-btn" title="Delete column" (click)="deleteColumn(column)">&times;</button>
+              }
+            </div>
+
+            <!-- Task list: cards can be dropped into any column's list -->
+            <div
+              class="task-list"
+              cdkDropList
+              [id]="'column-' + column.id"
+              [cdkDropListData]="column.id"
+              [cdkDropListConnectedTo]="taskListIds()"
+              (cdkDropListDropped)="dropTask($event)"
+            >
+              @for (task of store.tasksByColumn()[column.id]; track task.id) {
+                <div class="task-card" cdkDrag [cdkDragData]="task" (click)="dialog.set({ columnId: column.id, taskId: task.id })">
+                  <div class="task-title">{{ task.title }}</div>
+                  <div class="task-meta">
+                    <span class="priority priority-{{ task.priority.toLowerCase() }}">{{ task.priority }}</span>
+                    @if (task.dueDate) {
+                      <span class="due" [class.overdue]="isOverdue(task.dueDate) && column.name !== 'Done'" [title]="'Due ' + task.dueDate">{{ dueLabel(task.dueDate) }}</span>
+                    }
+                    <span class="spacer"></span>
+                    @if (task.assigneeName) {
+                      <span class="avatar avatar-small" [title]="'Assigned to ' + task.assigneeName">{{
+                        initials(task.assigneeName)
+                      }}</span>
+                    }
+                  </div>
+                </div>
+              } @empty {
+                <div class="task-empty">Drop tasks here</div>
+              }
+            </div>
+
+            <button class="add-task" (click)="dialog.set({ columnId: column.id, taskId: null })">+ Add task</button>
+          </div>
+        }
+
+        <form class="column column-new" (ngSubmit)="addColumn()">
+          <input name="newColumn" [(ngModel)]="newColumnName" placeholder="+ Add column" maxlength="50" />
+          @if (newColumnName.trim()) {
+            <button class="btn btn-primary btn-small" type="submit">Add</button>
+          }
+        </form>
+      </div>
+
+      <!-- Activity panel -->
+      @if (showActivity()) {
+        <aside class="activity">
+          <h3>Activity</h3>
+          <ul>
+            @for (entry of store.activity(); track entry.id) {
+              <li>
+                <div>{{ entry.message }}</div>
+                <div class="muted small">{{ entry.createdAt | timeAgo }}</div>
+              </li>
+            } @empty {
+              <li class="muted">Nothing yet.</li>
+            }
+          </ul>
+        </aside>
+      }
+    </div>
+  </section>
+
+  @if (dialog(); as d) {
+    <app-task-dialog [columnId]="d.columnId" [taskId]="d.taskId" (closed)="dialog.set(null)" />
+  }
+  @if (showMembers()) {
+    <app-members-dialog (closed)="showMembers.set(false)" />
+  }
+} @else {
+  <p class="page muted">Loading board...</p>
+}

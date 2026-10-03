@@ -139,8 +139,10 @@ public class BoardService
         var activity = _db.AddActivity(boardId, user, message);
         await _db.SaveChangesAsync();
 
-        await _notifier.RemoveUserFromBoardAsync(boardId, memberUserId);
+        // Tell the group (including the removed user, so their screen can react) and only then
+        // cut the removed user's connections off from the group.
         await _notifier.SendAsync(boardId, BoardEvents.MembersChanged, await GetMembersAsync(boardId));
+        await _notifier.RemoveUserFromBoardAsync(boardId, memberUserId);
         if (theirTasks.Count > 0)
         {
             var ids = theirTasks.Select(t => t.Id).ToList();

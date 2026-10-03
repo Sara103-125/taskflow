@@ -1,0 +1,73 @@
+<div class="backdrop" (click)="closed.emit()">
+  <div class="card dialog" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <h2>{{ isEdit() ? 'Edit task' : 'New task' }}</h2>
+
+    @if (wasDeleted()) {
+      <div class="banner banner-error">This task was deleted by someone else.</div>
+    } @else if (changedByOthers()) {
+      <div class="banner">
+        <strong>This task was updated by someone else.</strong>
+        @if (latest(); as theirs) {
+          <span class="small">Their version: "{{ theirs.title }}", {{ theirs.priority }} priority{{ theirs.assigneeName ? ', assigned to ' + theirs.assigneeName : '' }}.</span>
+        }
+        <div class="banner-actions">
+          <button class="btn btn-small" type="button" (click)="loadTheirs()">Load their version</button>
+          <button class="btn btn-small btn-ghost" type="button" (click)="keepMine()">Keep my changes</button>
+        </div>
+      </div>
+    }
+
+    <form (ngSubmit)="save()">
+      <label>
+        Title
+        <input name="title" [(ngModel)]="form.title" required maxlength="200" autofocus />
+      </label>
+      <label>
+        Description
+        <textarea name="description" [(ngModel)]="form.description" rows="4" maxlength="4000"></textarea>
+      </label>
+      <div class="form-row">
+        <label>
+          Assignee
+          <select name="assignee" [(ngModel)]="form.assigneeId">
+            <option [ngValue]="null">Unassigned</option>
+            @for (member of store.members(); track member.userId) {
+              <option [ngValue]="member.userId">{{ member.displayName }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Due date
+          <input name="dueDate" type="date" [(ngModel)]="form.dueDate" />
+        </label>
+        <label>
+          Priority
+          <select name="priority" [(ngModel)]="form.priority">
+            @for (p of priorities; track p) {
+              <option [ngValue]="p">{{ p }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      @if (error() && !changedByOthers()) {
+        <p class="error">{{ error() }}</p>
+      }
+
+      <div class="dialog-actions">
+        @if (isEdit()) {
+          <button class="btn btn-ghost danger" type="button" (click)="remove()" [disabled]="wasDeleted()">Delete</button>
+        }
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" type="button" (click)="closed.emit()">Cancel</button>
+        <button
+          class="btn btn-primary"
+          type="submit"
+          [disabled]="saving() || !form.title.trim() || wasDeleted() || changedByOthers()"
+        >
+          {{ saving() ? 'Saving...' : 'Save' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,53 @@
+<section class="auth-page">
+  <div class="auth-intro">
+    <h1>Plan together, in real time.</h1>
+    <p class="muted">
+      TaskFlow is a small team task board. Drag cards between columns and everyone on the board sees it
+      instantly.
+    </p>
+    <button class="btn btn-primary btn-large" (click)="tryDemo()" [disabled]="busy()">Try the demo</button>
+    <p class="muted small">No sign-up needed. Demo data resets every day.</p>
+  </div>
+
+  <div class="card auth-card">
+    <div class="tabs">
+      <button [class.active]="mode() === 'login'" (click)="switchMode('login')">Log in</button>
+      <button [class.active]="mode() === 'register'" (click)="switchMode('register')">Register</button>
+    </div>
+
+    <form (ngSubmit)="submit()" #form="ngForm">
+      @if (mode() === 'register') {
+        <label>
+          Name
+          <input name="displayName" [(ngModel)]="displayName" required maxlength="50" autocomplete="name" />
+        </label>
+      }
+      <label>
+        Email
+        <input name="email" type="email" [(ngModel)]="email" required email autocomplete="email" />
+      </label>
+      <label>
+        Password
+        <input
+          name="password"
+          type="password"
+          [(ngModel)]="password"
+          required
+          [minlength]="mode() === 'register' ? 8 : 1"
+          [autocomplete]="mode() === 'login' ? 'current-password' : 'new-password'"
+        />
+      </label>
+      @if (mode() === 'register') {
+        <p class="muted small">At least 8 characters, with an uppercase letter, a lowercase letter and a digit.</p>
+      }
+
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+
+      <button class="btn btn-primary full" type="submit" [disabled]="busy() || form.invalid">
+        {{ mode() === 'login' ? 'Log in' : 'Create account' }}
+      </button>
+    </form>
+  </div>
+</section>
