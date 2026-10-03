@@ -35,6 +35,17 @@ public class TaskItem
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
+    /// Soft delete: archived tasks keep their data but are hidden everywhere by a global
+    /// query filter (see AppDbContext). Restoring just sets this back to null.
+    /// </summary>
+    public DateTime? ArchivedAt { get; set; }
+
+    public List<TaskLabel> TaskLabels { get; set; } = new();
+    public List<ChecklistItem> Checklist { get; set; } = new();
+    public List<Comment> Comments { get; set; } = new();
+    public List<TaskHistory> History { get; set; } = new();
+
+    /// <summary>
     /// SQL Server "rowversion" column. The database changes it automatically on every update.
     /// EF Core adds "WHERE RowVersion = @original" to UPDATEs, so if someone else saved first,
     /// zero rows match and EF throws DbUpdateConcurrencyException instead of silently overwriting.

@@ -17,6 +17,12 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<Column> Columns => Set<Column>();
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+    public DbSet<Label> Labels => Set<Label>();
+    public DbSet<TaskLabel> TaskLabels => Set<TaskLabel>();
+    public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
+    public DbSet<Comment> Comments => Set<Comment>();
+    public DbSet<TaskHistory> TaskHistory => Set<TaskHistory>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     /// <summary>
     /// We always store UTC. SQL Server's datetime2 doesn't remember that, so mark values read
@@ -75,6 +81,64 @@ public class AppDbContext : IdentityDbContext<AppUser>
             e.HasOne(t => t.Assignee).WithMany()
                 .HasForeignKey(t => t.AssigneeId).OnDelete(DeleteBehavior.NoAction);
             e.HasIndex(t => new { t.ColumnId, t.Position });
+
+            // Soft delete: every query on Tasks automatically adds "WHERE ArchivedAt IS NULL".
+            // Code that really needs archived tasks calls .IgnoreQueryFilters().
+            e.HasQueryFilter(t => t.ArchivedAt == null);
+        });
+
+        builder.Entity<Label>(e =>
+        {
+            e.Property(l => l.Name).HasMaxLength(30).IsRequired();
+            e.Property(l => l.Color).HasMaxLength(7).IsRequired();
+            e.HasOne(l => l.Board).WithMany(b => b.Labels)
+                .HasForeignKey(l => l.BoardId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TaskLabel>(e =>
+        {
+            e.HasKey(tl => new { tl.TaskId, tl.LabelId });
+            e.HasOne(tl => tl.Task).WithMany(t => t.TaskLabels)
+                .HasForeignKey(tl => tl.TaskId).OnDelete(DeleteBehavior.Cascade);
+            // Board -> Column -> Task -> TaskLabel already cascades. A second path
+            // Board -> Label -> TaskLabel is not allowed by SQL Server, so services
+            // remove TaskLabel rows themselves before deleting a label or a board.
+            e.HasOne(tl => tl.Label).WithMany(l => l.TaskLabels)
+                .HasForeignKey(tl => tl.LabelId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<ChecklistItem>(e =>
+        {
+            e.Property(c => c.Text).HasMaxLength(200).IsRequired();
+            e.HasOne(c => c.Task).WithMany(t => t.Checklist)
+                .HasForeignKey(c => c.TaskId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Comment>(e =>
+        {
+            e.Property(c => c.Body).HasMaxLength(2000).IsRequired();
+            e.HasOne(c => c.Task).WithMany(t => t.Comments)
+                .HasForeignKey(c => c.TaskId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(c => c.Author).WithMany()
+                .HasForeignKey(c => c.AuthorId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<TaskHistory>(e =>
+        {
+            e.Property(h => h.UserName).HasMaxLength(50).IsRequired();
+            e.Property(h => h.Change).HasMaxLength(300).IsRequired();
+            e.HasOne(h => h.Task).WithMany(t => t.History)
+                .HasForeignKey(h => h.TaskId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Notification>(e =>
+        {
+            e.Property(n => n.Message).HasMaxLength(300).IsRequired();
+            e.HasOne(n => n.User).WithMany()
+                .HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(n => n.Board).WithMany()
+                .HasForeignKey(n => n.BoardId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(n => new { n.UserId, n.IsRead, n.CreatedAt });
         });
 
         builder.Entity<ActivityLog>(e =>

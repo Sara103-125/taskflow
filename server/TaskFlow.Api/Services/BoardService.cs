@@ -22,12 +22,13 @@ public class BoardService
         _notifier = notifier;
     }
 
-    /// <summary>Only boards the user is a member of.</summary>
+    /// <summary>Only boards the user is a member of. Archived boards are only listed for their owner.</summary>
     public Task<List<BoardSummaryDto>> GetMyBoardsAsync(string userId) =>
         _db.BoardMembers
-            .Where(m => m.UserId == userId)
+            .Where(m => m.UserId == userId && (m.Board.ArchivedAt == null || m.Role == BoardRole.Owner))
             .OrderBy(m => m.Board.Name)
-            .Select(m => new BoardSummaryDto(m.BoardId, m.Board.Name, m.Role, m.Board.Members.Count, m.Board.IsDemo))
+            .Select(m => new BoardSummaryDto(
+                m.BoardId, m.Board.Name, m.Role, m.Board.Members.Count, m.Board.IsDemo, m.Board.ArchivedAt))
             .ToListAsync();
 
     public async Task<BoardDetailDto> GetBoardAsync(int boardId, string userId)
@@ -45,8 +46,9 @@ public class BoardService
             .OrderBy(t => t.Position)
             .Select(Mappings.ToTaskDto)
             .ToListAsync();
+        var labels = await GetLabelsAsync(_db, boardId);
 
-        return new BoardDetailDto(boardId, me.Board.Name, me.Board.IsDemo, me.Role, members, columns, tasks);
+        return new BoardDetailDto(boardId, me.Board.Name, me.Board.IsDemo, me.Role, members, columns, tasks, labels);
     }
 
     public async Task<BoardSummaryDto> CreateAsync(CurrentUser user, string name)
@@ -60,7 +62,7 @@ public class BoardService
         _db.Boards.Add(board);
         await _db.SaveChangesAsync();
 
-        return new BoardSummaryDto(board.Id, board.Name, BoardRole.Owner, 1, false);
+        return new BoardSummaryDto(board.Id, board.Name, BoardRole.Owner, 1, false, null);
     }
 
     public async Task RenameAsync(int boardId, CurrentUser user, string name)
@@ -74,16 +76,49 @@ public class BoardService
         await _notifier.BroadcastAsync(activity);
     }
 
+    /// <summary>Permanent delete. Works on archived boards too.</summary>
     public async Task DeleteAsync(int boardId, CurrentUser user)
     {
-        var owner = await _access.RequireOwnerAsync(boardId, user.Id);
+        var owner = await _access.RequireOwnerAsync(boardId, user.Id, allowArchived: true);
         if (owner.Board.IsDemo)
             throw new ForbiddenException("The demo board can't be deleted.");
 
-        _db.Boards.Remove(owner.Board); // columns, tasks, members and activity cascade
+        await RemoveBoardAsync(_db, owner.Board);
         await _db.SaveChangesAsync();
 
         await _notifier.SendAsync(boardId, BoardEvents.BoardDeleted, boardId);
+    }
+
+    /// <summary>
+    /// Marks a board for deletion. Columns, tasks, members, labels and activity cascade in the
+    /// database, but task-label links must go first (see the TaskLabel comment in AppDbContext).
+    /// </summary>
+    public static async Task RemoveBoardAsync(AppDbContext db, Board board)
+    {
+        db.TaskLabels.RemoveRange(await db.TaskLabels.Where(tl => tl.Label.BoardId == board.Id).ToListAsync());
+        db.Boards.Remove(board);
+    }
+
+    /// <summary>Soft delete: hides the board from everyone but the owner, who can restore it.</summary>
+    public async Task ArchiveAsync(int boardId, CurrentUser user)
+    {
+        var owner = await _access.RequireOwnerAsync(boardId, user.Id);
+        if (owner.Board.IsDemo)
+            throw new ForbiddenException("The demo board can't be archived.");
+
+        owner.Board.ArchivedAt = DateTime.UtcNow;
+        _db.AddActivity(boardId, user, $"{user.DisplayName} archived the board");
+        await _db.SaveChangesAsync();
+
+        await _notifier.SendAsync(boardId, BoardEvents.BoardArchived, boardId);
+    }
+
+    public async Task RestoreAsync(int boardId, CurrentUser user)
+    {
+        var owner = await _access.RequireOwnerAsync(boardId, user.Id, allowArchived: true);
+        owner.Board.ArchivedAt = null;
+        _db.AddActivity(boardId, user, $"{user.DisplayName} restored the board");
+        await _db.SaveChangesAsync();
     }
 
     public async Task<List<MemberDto>> InviteAsync(int boardId, CurrentUser user, string email)
@@ -101,11 +136,14 @@ public class BoardService
 
         _db.BoardMembers.Add(new BoardMember { BoardId = boardId, UserId = invitee.Id, Role = BoardRole.Member });
         var activity = _db.AddActivity(boardId, user, $"{user.DisplayName} added {invitee.DisplayName} to the board");
+        var notification = _db.AddNotification(invitee.Id, user, boardId, null,
+            $"{user.DisplayName} added you to the board '{owner.Board.Name}'");
         await _db.SaveChangesAsync();
 
         var members = await GetMembersAsync(boardId);
         await _notifier.SendAsync(boardId, BoardEvents.MembersChanged, members);
         await _notifier.BroadcastAsync(activity);
+        await _notifier.PushAsync(new[] { notification });
         return members;
     }
 
@@ -126,8 +164,8 @@ public class BoardService
         if (member.Role == BoardRole.Owner)
             throw new BadRequestException("The owner can't be removed. Delete the board instead.");
 
-        // Unassign their tasks on this board (the FK has no cascade on purpose).
-        var theirTasks = await _db.Tasks
+        // Unassign their tasks on this board, archived ones too (the FK has no cascade on purpose).
+        var theirTasks = await _db.Tasks.IgnoreQueryFilters()
             .Where(t => t.Column.BoardId == boardId && t.AssigneeId == memberUserId)
             .ToListAsync();
         foreach (var task in theirTasks) task.AssigneeId = null;
@@ -162,6 +200,13 @@ public class BoardService
             .Select(a => new ActivityDto(a.Id, a.Message, a.CreatedAt))
             .ToListAsync();
     }
+
+    public static Task<List<LabelDto>> GetLabelsAsync(AppDbContext db, int boardId) =>
+        db.Labels
+            .Where(l => l.BoardId == boardId)
+            .OrderBy(l => l.Name)
+            .Select(l => new LabelDto(l.Id, l.Name, l.Color))
+            .ToListAsync();
 
     private Task<List<MemberDto>> GetMembersAsync(int boardId) =>
         _db.BoardMembers

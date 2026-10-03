@@ -40,6 +40,28 @@ public class BoardsController : ApiControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:int}/archive")]
+    public async Task<IActionResult> Archive(int id)
+    {
+        await _boards.ArchiveAsync(id, Me);
+        return NoContent();
+    }
+
+    [HttpPost("{id:int}/restore")]
+    public async Task<IActionResult> Restore(int id)
+    {
+        await _boards.RestoreAsync(id, Me);
+        return NoContent();
+    }
+
+    [HttpGet("{id:int}/archived-tasks")]
+    public Task<List<ArchivedTaskDto>> ArchivedTasks(int id, [FromServices] TaskService tasks) =>
+        tasks.GetArchivedAsync(id, Me.Id);
+
+    [HttpPost("{id:int}/labels")]
+    public Task<LabelDto> AddLabel(int id, LabelRequest request, [FromServices] LabelService labels) =>
+        labels.CreateAsync(id, Me, request);
+
     [HttpPost("{id:int}/members")]
     public Task<List<MemberDto>> Invite(int id, InviteMemberRequest request) => _boards.InviteAsync(id, Me, request.Email);
 

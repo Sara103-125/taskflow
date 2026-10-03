@@ -59,7 +59,8 @@ public class DemoSeeder
                 return demo;
 
             // Reset: delete every board the demo account owns (including ones visitors created).
-            _db.Boards.RemoveRange(ownedBoards);
+            foreach (var board in ownedBoards)
+                await BoardService.RemoveBoardAsync(_db, board);
             await _db.SaveChangesAsync();
             foreach (var board in ownedBoards)
                 await _notifier.SendAsync(board.Id, BoardEvents.BoardDeleted, board.Id);
@@ -99,6 +100,11 @@ public class DemoSeeder
         board.Members.Add(new BoardMember { UserId = sara.Id, Role = BoardRole.Member });
         board.Members.Add(new BoardMember { UserId = ali.Id, Role = BoardRole.Member });
 
+        var frontend = new Label { Name = "Frontend", Color = "#2563eb" };
+        var backend = new Label { Name = "Backend", Color = "#7c3aed" };
+        var bug = new Label { Name = "Bug", Color = "#dc2626" };
+        board.Labels.AddRange(new[] { frontend, backend, bug });
+
         var todo = new Column { Name = "To Do", Position = 0 };
         var doing = new Column { Name = "In Progress", Position = 1 };
         var done = new Column { Name = "Done", Position = 2 };
@@ -129,9 +135,53 @@ public class DemoSeeder
             NewActivity(sara, "Sara moved 'Add live updates' to In Progress", now.AddMinutes(-10))
         });
 
+        // Labels, checklists and comments so every feature has something to show.
+        var tasks = todo.Tasks.Concat(doing.Tasks).Concat(done.Tasks).ToDictionary(t => t.Title);
+        AddLabels(tasks["Design login page"], frontend);
+        AddLabels(tasks["Write API documentation"], backend);
+        AddLabels(tasks["Build board view"], frontend);
+        AddLabels(tasks["Add live updates"], frontend, backend);
+        AddLabels(tasks["Create database schema"], backend);
+        AddLabels(tasks["Set up CI pipeline"], backend, bug);
+
+        tasks["Build board view"].Checklist.AddRange(new[]
+        {
+            new ChecklistItem { Text = "Columns layout", IsDone = true, Position = 0 },
+            new ChecklistItem { Text = "Drag and drop between columns", IsDone = true, Position = 1 },
+            new ChecklistItem { Text = "Reorder columns", Position = 2 },
+            new ChecklistItem { Text = "Empty state", Position = 3 }
+        });
+        tasks["Design login page"].Checklist.AddRange(new[]
+        {
+            new ChecklistItem { Text = "Wireframe", IsDone = true, Position = 0 },
+            new ChecklistItem { Text = "Validation messages", Position = 1 }
+        });
+
+        tasks["Build board view"].Comments.AddRange(new[]
+        {
+            new Comment { AuthorId = sara.Id, Body = "@Demo User can you also make the cards show the checklist progress?", CreatedAt = now.AddMinutes(-25) },
+            new Comment { AuthorId = ali.Id, Body = "The API already returns the counts, so it's just UI work.", CreatedAt = now.AddMinutes(-15) }
+        });
+        foreach (var task in tasks.Values)
+            task.History.Add(new TaskHistory { UserName = "Demo User", Change = "created this task", CreatedAt = now.AddMinutes(-60) });
+        tasks["Add live updates"].History.Add(new TaskHistory
+        {
+            UserName = "Sara", Change = "moved this task from To Do to In Progress", CreatedAt = now.AddMinutes(-10)
+        });
+
         _db.Boards.Add(board);
         await _db.SaveChangesAsync();
+
+        _db.Notifications.Add(new Notification
+        {
+            UserId = demo.Id, BoardId = board.Id, TaskId = tasks["Build board view"].Id, CreatedAt = now.AddMinutes(-25),
+            Message = "Sara mentioned you on 'Build board view'"
+        });
+        await _db.SaveChangesAsync();
     }
+
+    private static void AddLabels(TaskItem task, params Label[] labels) =>
+        task.TaskLabels.AddRange(labels.Select(l => new TaskLabel { Label = l }));
 
     private static TaskItem NewTask(string title, string? description, AppUser? assignee, DateOnly? due, TaskPriority priority, int position) =>
         new()

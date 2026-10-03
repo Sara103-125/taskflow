@@ -37,9 +37,23 @@ public sealed class TestDb : IDisposable
     /// <summary>A second context on the same database, like a second web request.</summary>
     public AppDbContext NewContext() => new SqliteTestDbContext(_options);
 
-    public BoardService Boards(AppDbContext? db = null) => new(db ?? Db, new BoardAccess(db ?? Db), Notifier);
-    public ColumnService Columns(AppDbContext? db = null) => new(db ?? Db, new BoardAccess(db ?? Db), Notifier);
-    public TaskService Tasks(AppDbContext? db = null) => new(db ?? Db, new BoardAccess(db ?? Db), Notifier);
+    // Each service call gets its own DbContext, exactly like each web request does in the app.
+    public BoardService Boards(AppDbContext? db = null) { db ??= Request(); return new(db, new BoardAccess(db), Notifier); }
+    public ColumnService Columns(AppDbContext? db = null) { db ??= Request(); return new(db, new BoardAccess(db), Notifier); }
+    public TaskService Tasks(AppDbContext? db = null) { db ??= Request(); return new(db, new BoardAccess(db), Notifier); }
+    public LabelService Labels() { var db = Request(); return new(db, new BoardAccess(db), Notifier); }
+    public ChecklistService Checklist() { var db = Request(); return new(db, new BoardAccess(db), Notifier); }
+    public CommentService Comments() { var db = Request(); return new(db, new BoardAccess(db), Notifier); }
+    public NotificationService Notifications() => new(Request());
+
+    private readonly List<AppDbContext> _requests = new();
+
+    private AppDbContext Request()
+    {
+        var db = NewContext();
+        _requests.Add(db);
+        return db;
+    }
 
     public CurrentUser AddUser(string name)
     {
@@ -78,6 +92,7 @@ public sealed class TestDb : IDisposable
 
     public void Dispose()
     {
+        _requests.ForEach(db => db.Dispose());
         Db.Dispose();
         _connection.Dispose();
     }
@@ -100,10 +115,17 @@ public class FakeNotifier : IBoardNotifier
 {
     public List<(int BoardId, string Event, object? Payload)> Sent { get; } = new();
     public List<(int BoardId, string UserId)> Removed { get; } = new();
+    public List<(string UserId, string Event, object? Payload)> SentToUsers { get; } = new();
 
     public Task SendAsync(int boardId, string eventName, object? payload)
     {
         Sent.Add((boardId, eventName, payload));
+        return Task.CompletedTask;
+    }
+
+    public Task SendToUserAsync(string userId, string eventName, object? payload)
+    {
+        SentToUsers.Add((userId, eventName, payload));
         return Task.CompletedTask;
     }
 

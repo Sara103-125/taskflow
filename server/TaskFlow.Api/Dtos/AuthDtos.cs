@@ -14,3 +14,9 @@ public record LoginRequest(
 public record UserDto(string Id, string Email, string DisplayName);
 
 public record AuthResponse(string Token, UserDto User);
+
+public record UpdateProfileRequest([Required, MaxLength(50)] string DisplayName);
+
+public record ChangePasswordRequest(
+    [Required] string CurrentPassword,
+    [Required, MinLength(8), MaxLength(100)] string NewPassword);

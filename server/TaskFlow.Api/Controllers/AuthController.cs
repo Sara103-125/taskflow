@@ -89,6 +89,42 @@ public class AuthController : ControllerBase
         return new UserDto(user.Id, user.Email!, user.DisplayName);
     }
 
+    /// <summary>Change my display name. Returns a fresh token, because the name is inside the JWT.</summary>
+    [Authorize]
+    [HttpPut("profile")]
+    public async Task<ActionResult<AuthResponse>> UpdateProfile(UpdateProfileRequest request)
+    {
+        var user = await _users.FindByIdAsync(User.GetUserId());
+        if (user is null) return Unauthorized();
+        if (DemoSeeder.IsDemoUser(user))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "The demo account's profile can't be changed." });
+
+        user.DisplayName = request.DisplayName.Trim();
+        await _users.UpdateAsync(user);
+        return Ok(ToResponse(user));
+    }
+
+    [Authorize]
+    [HttpPost("change-password")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
+    {
+        var user = await _users.FindByIdAsync(User.GetUserId());
+        if (user is null) return Unauthorized();
+        if (DemoSeeder.IsDemoUser(user))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "The demo account's password can't be changed." });
+
+        // Identity checks the current password and the new password rules for us.
+        var result = await _users.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            foreach (var error in result.Errors)
+                ModelState.AddModelError(error.Code, error.Description);
+            return ValidationProblem(ModelState);
+        }
+        return NoContent();
+    }
+
     private AuthResponse ToResponse(AppUser user) =>
         new(_tokens.CreateToken(user), new UserDto(user.Id, user.Email!, user.DisplayName));
 }

@@ -264,6 +264,9 @@ namespace TaskFlow.Api.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -301,6 +304,35 @@ namespace TaskFlow.Api.Data.Migrations
                     b.ToTable("BoardMembers");
                 });
 
+            modelBuilder.Entity("TaskFlow.Api.Entities.ChecklistItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsDone")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TaskId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("ChecklistItems");
+                });
+
             modelBuilder.Entity("TaskFlow.Api.Entities.Column", b =>
                 {
                     b.Property<int>("Id")
@@ -327,6 +359,135 @@ namespace TaskFlow.Api.Data.Migrations
                     b.ToTable("Columns");
                 });
 
+            modelBuilder.Entity("TaskFlow.Api.Entities.Comment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AuthorId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TaskId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("Comments");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.Label", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BoardId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BoardId");
+
+                    b.ToTable("Labels");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.Notification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BoardId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("TaskId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BoardId");
+
+                    b.HasIndex("UserId", "IsRead", "CreatedAt");
+
+                    b.ToTable("Notifications");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.TaskHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Change")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TaskId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("TaskHistory");
+                });
+
             modelBuilder.Entity("TaskFlow.Api.Entities.TaskItem", b =>
                 {
                     b.Property<int>("Id")
@@ -334,6 +495,9 @@ namespace TaskFlow.Api.Data.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("AssigneeId")
                         .HasColumnType("nvarchar(450)");
@@ -378,6 +542,21 @@ namespace TaskFlow.Api.Data.Migrations
                     b.HasIndex("ColumnId", "Position");
 
                     b.ToTable("Tasks");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.TaskLabel", b =>
+                {
+                    b.Property<int>("TaskId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LabelId")
+                        .HasColumnType("int");
+
+                    b.HasKey("TaskId", "LabelId");
+
+                    b.HasIndex("LabelId");
+
+                    b.ToTable("TaskLabels");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -468,6 +647,17 @@ namespace TaskFlow.Api.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TaskFlow.Api.Entities.ChecklistItem", b =>
+                {
+                    b.HasOne("TaskFlow.Api.Entities.TaskItem", "Task")
+                        .WithMany("Checklist")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Task");
+                });
+
             modelBuilder.Entity("TaskFlow.Api.Entities.Column", b =>
                 {
                     b.HasOne("TaskFlow.Api.Entities.Board", "Board")
@@ -477,6 +667,66 @@ namespace TaskFlow.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Board");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.Comment", b =>
+                {
+                    b.HasOne("TaskFlow.Api.Entities.AppUser", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("TaskFlow.Api.Entities.TaskItem", "Task")
+                        .WithMany("Comments")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Task");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.Label", b =>
+                {
+                    b.HasOne("TaskFlow.Api.Entities.Board", "Board")
+                        .WithMany("Labels")
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Board");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.Notification", b =>
+                {
+                    b.HasOne("TaskFlow.Api.Entities.Board", "Board")
+                        .WithMany()
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TaskFlow.Api.Entities.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Board");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.TaskHistory", b =>
+                {
+                    b.HasOne("TaskFlow.Api.Entities.TaskItem", "Task")
+                        .WithMany("History")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Task");
                 });
 
             modelBuilder.Entity("TaskFlow.Api.Entities.TaskItem", b =>
@@ -497,6 +747,25 @@ namespace TaskFlow.Api.Data.Migrations
                     b.Navigation("Column");
                 });
 
+            modelBuilder.Entity("TaskFlow.Api.Entities.TaskLabel", b =>
+                {
+                    b.HasOne("TaskFlow.Api.Entities.Label", "Label")
+                        .WithMany("TaskLabels")
+                        .HasForeignKey("LabelId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("TaskFlow.Api.Entities.TaskItem", "Task")
+                        .WithMany("TaskLabels")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Label");
+
+                    b.Navigation("Task");
+                });
+
             modelBuilder.Entity("TaskFlow.Api.Entities.AppUser", b =>
                 {
                     b.Navigation("Memberships");
@@ -508,12 +777,30 @@ namespace TaskFlow.Api.Data.Migrations
 
                     b.Navigation("Columns");
 
+                    b.Navigation("Labels");
+
                     b.Navigation("Members");
                 });
 
             modelBuilder.Entity("TaskFlow.Api.Entities.Column", b =>
                 {
                     b.Navigation("Tasks");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.Label", b =>
+                {
+                    b.Navigation("TaskLabels");
+                });
+
+            modelBuilder.Entity("TaskFlow.Api.Entities.TaskItem", b =>
+                {
+                    b.Navigation("Checklist");
+
+                    b.Navigation("Comments");
+
+                    b.Navigation("History");
+
+                    b.Navigation("TaskLabels");
                 });
 #pragma warning restore 612, 618
         }

@@ -15,14 +15,19 @@ public class BoardAccess
 
     public BoardAccess(AppDbContext db) => _db = db;
 
-    public async Task<BoardMember> RequireMemberAsync(int boardId, string userId)
+    /// <param name="allowArchived">Only restore / delete may touch an archived board.</param>
+    public async Task<BoardMember> RequireMemberAsync(int boardId, string userId, bool allowArchived = false)
     {
         var member = await _db.BoardMembers
             .Include(m => m.Board)
             .FirstOrDefaultAsync(m => m.BoardId == boardId && m.UserId == userId);
 
         if (member is not null)
+        {
+            if (member.Board.ArchivedAt is not null && !allowArchived)
+                throw new ForbiddenException("This board is archived. The owner can restore it from the boards page.");
             return member;
+        }
 
         if (!await _db.Boards.AnyAsync(b => b.Id == boardId))
             throw new NotFoundException("Board not found.");
@@ -30,9 +35,9 @@ public class BoardAccess
         throw new ForbiddenException("You are not a member of this board.");
     }
 
-    public async Task<BoardMember> RequireOwnerAsync(int boardId, string userId)
+    public async Task<BoardMember> RequireOwnerAsync(int boardId, string userId, bool allowArchived = false)
     {
-        var member = await RequireMemberAsync(boardId, userId);
+        var member = await RequireMemberAsync(boardId, userId, allowArchived);
         if (member.Role != BoardRole.Owner)
             throw new ForbiddenException("Only the board owner can do that.");
         return member;

@@ -13,6 +13,8 @@ public class PresenceTracker
     private readonly object _lock = new();
     // boardId -> (connectionId -> user)
     private readonly Dictionary<int, Dictionary<string, OnlineUserDto>> _boards = new();
+    // connectionId -> (boardId, taskId) of the task dialog that connection has open
+    private readonly Dictionary<string, (int BoardId, int TaskId)> _editing = new();
 
     public void Add(int boardId, string connectionId, OnlineUserDto user)
     {
@@ -33,6 +35,8 @@ public class PresenceTracker
                 connections.Remove(connectionId);
                 if (connections.Count == 0) _boards.Remove(boardId);
             }
+            if (_editing.TryGetValue(connectionId, out var editing) && editing.BoardId == boardId)
+                _editing.Remove(connectionId);
         }
     }
 
@@ -44,6 +48,38 @@ public class PresenceTracker
             var affected = _boards.Where(b => b.Value.ContainsKey(connectionId)).Select(b => b.Key).ToList();
             foreach (var boardId in affected) Remove(boardId, connectionId);
             return affected;
+        }
+    }
+
+    public bool IsOnBoard(int boardId, string connectionId)
+    {
+        lock (_lock)
+        {
+            return _boards.TryGetValue(boardId, out var connections) && connections.ContainsKey(connectionId);
+        }
+    }
+
+    /// <summary>Remembers that this connection has a task open (null = closed the dialog).</summary>
+    public void SetEditing(int boardId, string connectionId, int? taskId)
+    {
+        lock (_lock)
+        {
+            if (taskId is null) _editing.Remove(connectionId);
+            else _editing[connectionId] = (boardId, taskId.Value);
+        }
+    }
+
+    /// <summary>Who has which task open on this board (one row per user and task).</summary>
+    public List<EditorDto> GetEditors(int boardId)
+    {
+        lock (_lock)
+        {
+            if (!_boards.TryGetValue(boardId, out var connections)) return new List<EditorDto>();
+            return _editing
+                .Where(e => e.Value.BoardId == boardId && connections.ContainsKey(e.Key))
+                .Select(e => new EditorDto(e.Value.TaskId, connections[e.Key].UserId, connections[e.Key].DisplayName))
+                .Distinct()
+                .ToList();
         }
     }
 

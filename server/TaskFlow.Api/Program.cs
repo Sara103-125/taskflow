@@ -3,7 +3,9 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using TaskFlow.Api;
@@ -32,7 +34,10 @@ var allowedOrigins = config.GetSection("Cors:AllowedOrigins").Get<string[]>() ??
 
 // ---------- Database ----------
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
+    options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure())
+        // Archived tasks are hidden by a query filter, and so are their labels, checklist and
+        // comments. EF warns about that combination; for us it is exactly the intended behaviour.
+        .ConfigureWarnings(w => w.Ignore(CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning)));
 
 // ---------- Identity (password hashing, lockout, unique emails) ----------
 builder.Services
@@ -104,9 +109,14 @@ builder.Services.AddScoped<BoardAccess>();
 builder.Services.AddScoped<BoardService>();
 builder.Services.AddScoped<ColumnService>();
 builder.Services.AddScoped<TaskService>();
+builder.Services.AddScoped<LabelService>();
+builder.Services.AddScoped<ChecklistService>();
+builder.Services.AddScoped<CommentService>();
+builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<DemoSeeder>();
 builder.Services.AddSingleton<PresenceTracker>();
 builder.Services.AddSingleton<IBoardNotifier, SignalRBoardNotifier>();
+builder.Services.AddSingleton<IUserIdProvider, SubClaimUserIdProvider>(); // Clients.User(id) uses the JWT "sub"
 
 // ---------- Errors: our exceptions -> 400/403/404/409 JSON, anything else -> generic 500 ----------
 builder.Services.AddExceptionHandler<AppExceptionHandler>();

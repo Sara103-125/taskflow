@@ -10,6 +10,9 @@ public interface IBoardNotifier
 {
     Task SendAsync(int boardId, string eventName, object? payload);
 
+    /// <summary>Sends to every open tab of one user (used for notifications).</summary>
+    Task SendToUserAsync(string userId, string eventName, object? payload);
+
     /// <summary>Stops a removed member's open connections from receiving more updates for the board.</summary>
     Task RemoveUserFromBoardAsync(int boardId, string userId);
 }
@@ -27,6 +30,9 @@ public class SignalRBoardNotifier : IBoardNotifier
 
     public Task SendAsync(int boardId, string eventName, object? payload) =>
         _hub.Clients.Group(BoardEvents.Group(boardId)).SendAsync(eventName, payload);
+
+    public Task SendToUserAsync(string userId, string eventName, object? payload) =>
+        _hub.Clients.User(userId).SendAsync(eventName, payload);
 
     public async Task RemoveUserFromBoardAsync(int boardId, string userId)
     {
