@@ -1,0 +1,32 @@
+# ---------- .NET ----------
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.trx
+publish/
+
+# ---------- Angular / Node ----------
+node_modules/
+dist/
+.angular/
+coverage/
+npm-debug.log*
+
+# ---------- Secrets & local config ----------
+# Real secrets live in `dotnet user-secrets` (local) and Azure App Settings (prod).
+.env
+.env.*
+*.pfx
+*.publishsettings
+appsettings.*.local.json
+secrets.json
+
+# ---------- Editors / OS ----------
+.idea/
+.vscode/*
+!.vscode/extensions.json
+Thumbs.db
+.DS_Store
