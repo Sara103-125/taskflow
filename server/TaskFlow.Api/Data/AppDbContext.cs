@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TaskFlow.Api.Entities;
 
 namespace TaskFlow.Api.Data;
@@ -16,6 +17,21 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<Column> Columns => Set<Column>();
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+
+    /// <summary>
+    /// We always store UTC. SQL Server's datetime2 doesn't remember that, so mark values read
+    /// back as UTC; then JSON sends "2026-10-04T09:00:00Z" and the browser shows local time.
+    /// </summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+    }
+
+    private class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
+    {
+        public UtcDateTimeConverter()
+            : base(toDb => toDb, fromDb => DateTime.SpecifyKind(fromDb, DateTimeKind.Utc)) { }
+    }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

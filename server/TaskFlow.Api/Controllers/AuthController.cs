@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using TaskFlow.Api.Auth;
 using TaskFlow.Api.Dtos;
 using TaskFlow.Api.Entities;
+using TaskFlow.Api.Services;
 
 namespace TaskFlow.Api.Controllers;
 
@@ -65,6 +66,18 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid email or password." });
 
         return Ok(ToResponse(user));
+    }
+
+    /// <summary>
+    /// "Try the demo": logs straight into the shared demo account (no password typing needed).
+    /// Also resets the demo board if it is more than a day old.
+    /// </summary>
+    [HttpPost("demo")]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<ActionResult<AuthResponse>> Demo([FromServices] DemoSeeder seeder)
+    {
+        var demo = await seeder.EnsureDemoAsync();
+        return Ok(ToResponse(demo));
     }
 
     [Authorize]

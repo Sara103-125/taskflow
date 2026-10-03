@@ -25,7 +25,7 @@ public class TaskItem
     public string? AssigneeId { get; set; }
     public AppUser? Assignee { get; set; }
 
-    public DateTime? DueDate { get; set; }
+    public DateOnly? DueDate { get; set; }
     public TaskPriority Priority { get; set; } = TaskPriority.Medium;
 
     /// <summary>0-based order of the task inside its column (top to bottom).</summary>

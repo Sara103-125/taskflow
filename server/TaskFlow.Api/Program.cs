@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -9,6 +10,9 @@ using TaskFlow.Api;
 using TaskFlow.Api.Auth;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Entities;
+using TaskFlow.Api.Hubs;
+using TaskFlow.Api.Infrastructure;
+using TaskFlow.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 var config = builder.Configuration;
@@ -61,6 +65,19 @@ builder.Services
             ClockSkew = TimeSpan.FromMinutes(1),
             NameClaimType = "name"
         };
+
+        // Browsers can't send an Authorization header on a WebSocket, so the SignalR client
+        // sends the JWT as ?access_token=... We only accept that on the hub URL.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                    context.Token = token;
+                return Task.CompletedTask;
+            }
+        };
     });
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<TokenService>();
@@ -82,8 +99,27 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
 });
 
-// ---------- MVC + Swagger ----------
-builder.Services.AddControllers();
+// ---------- App services ----------
+builder.Services.AddScoped<BoardAccess>();
+builder.Services.AddScoped<BoardService>();
+builder.Services.AddScoped<ColumnService>();
+builder.Services.AddScoped<TaskService>();
+builder.Services.AddScoped<DemoSeeder>();
+builder.Services.AddSingleton<PresenceTracker>();
+builder.Services.AddSingleton<IBoardNotifier, SignalRBoardNotifier>();
+
+// ---------- Errors: our exceptions -> 400/403/404/409 JSON, anything else -> generic 500 ----------
+builder.Services.AddExceptionHandler<AppExceptionHandler>();
+builder.Services.AddProblemDetails();
+
+// ---------- MVC + SignalR (enums travel as "High" instead of 2) ----------
+builder.Services.AddControllers()
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddSignalR()
+    .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+// ---------- Swagger (development only) ----------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -103,14 +139,17 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// ---------- Apply pending EF Core migrations on startup (simple for a single-instance app) ----------
+// ---------- On startup: apply EF Core migrations and make sure the demo board exists ----------
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<DemoSeeder>().EnsureDemoAsync();
 }
 
 // ---------- HTTP pipeline ----------
+app.UseExceptionHandler();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -128,6 +167,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<BoardHub>("/hubs/board");
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
 app.Run();
